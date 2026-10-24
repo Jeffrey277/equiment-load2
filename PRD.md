@@ -96,7 +96,11 @@
 - [ ] T-07 대여일 2026-10-25 → 반납예정일 2026-11-01(7일 뒤)은 됨 · 2026-11-02(8일 뒤)와 2026-10-24(대여일 전)는 거부
 - [ ] T-08 반납 → 장비가 '대여 가능'으로 바뀌고, 반납된 대여에는 [반납] 버튼이 없다. 콘솔로 반납완료 → 대여중 되돌리기는 거부
 - [ ] T-09 대여 기록이 있는 장비 삭제 → 거부 · 새로 등록만 한 장비 삭제 → 됨
-- [ ] T-10 반납예정일이 지난 대여중은 빨간 줄 · 반납완료는 기한이 지났어도 빨간 줄이 아니다 (Table Editor에서 start_date · due_date를 지난 날짜로 바꿔 확인)
+- [ ] T-10 반납예정일이 지난 대여중은 빨간 줄 · 반납완료는 기한이 지났어도 빨간 줄이 아니다
+  (R-06 트리거가 Table Editor 수정도 막으므로, SQL Editor에서 아래처럼 트리거를 잠깐 끄고 두 날짜를 함께 당겨 확인)
+  `alter table public.eqp_loans disable trigger eqp_loans_before_update;`
+  `update public.eqp_loans set start_date = start_date - 10, due_date = due_date - 10 where id = 대여_id;`
+  `alter table public.eqp_loans enable trigger eqp_loans_before_update;`
 - [ ] T-11 검색어 + 분류 + 상태 필터를 함께 걸면 세 조건을 모두 만족하는 장비만 보인다
 - [ ] T-12 test.html이 모두 PASS다
 - [ ] T-13 배포 주소의 소스 보기(Ctrl+U)와 GitHub 저장소에 비밀 키 · `.env`가 없다
