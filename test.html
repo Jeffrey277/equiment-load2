@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>logic.js 테스트</title>
+  <style>
+    body { font-family: "Malgun Gothic", sans-serif; margin: 24px; background: #fff; color: #1d2733; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #dde2e8; padding: 6px 10px; text-align: left; font-size: 14px; }
+    th { background: #f4f6f9; }
+    .pass { color: #1e7a46; font-weight: bold; }
+    .fail { color: #c0392b; font-weight: bold; }
+    #total { font-size: 18px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>logic.js 자동 테스트 (PRD 10장 T 번호)</h1>
+  <p id="total"></p>
+  <table>
+    <thead><tr><th>T</th><th>내용</th><th>기대</th><th>결과</th><th>판정</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script src="logic.js"></script>
+  <script>
+    const rows = [];
+
+    function check(t, name, actual, expected) {
+      rows.push({ t, name, actual, expected, ok: JSON.stringify(actual) === JSON.stringify(expected) });
+    }
+
+    function cardValue(cards, label) {
+      const card = cards.find(c => c.label === label);
+      return card ? card.value : null;
+    }
+
+    // ---------- 가상 데이터 ----------
+    const today = '2026-10-25';
+    const items = [
+      { id: 1, name: '노트북 A', status: '대여 가능' },
+      { id: 2, name: '가스 측정기', status: '대여중' },
+      { id: 3, name: '빔프로젝터', status: '대여 가능' },
+      { id: 4, name: '무전기', status: '대여중' }
+    ];
+    const myLoans = [
+      { id: 11, itemId: 2, status: '대여중', dueDate: '2026-10-28', returnedAt: null },
+      { id: 12, itemId: 4, status: '대여중', dueDate: '2026-10-24', returnedAt: null },                     // 연체
+      { id: 13, itemId: 1, status: '반납완료', dueDate: '2026-10-20', returnedAt: '2026-10-21T09:00:00+00:00' } // 기한 지났지만 반납완료
+    ];
+
+    // ---------- T-01 · T-02 요약 카드 ----------
+    const before = summarize(items, [], today, false);
+    check('T-01', '로그인 전 요약 카드 수', before.length, 3);
+    check('T-01', '로그인 전 카드 값 (전체 · 대여 가능 · 대여중)', before.map(c => c.value), [4, 2, 2]);
+    check('T-01', '로그인 전에는 [대여] 버튼 없음', canBorrow(items[0], null), false);
+
+    const after = summarize(items, myLoans, today, true);
+    check('T-02', '로그인 후 요약 카드 수', after.length, 5);
+    check('T-02', '내 대여중', cardValue(after, '내 대여중'), 2);
+    check('T-02', '내 연체 (반납완료는 세지 않음)', cardValue(after, '내 연체'), 1);
+    check('T-02', '로그인 후 대여 가능 장비에 [대여]', canBorrow(items[0], 'user-a'), true);
+
+    // ---------- T-06 중복 대여 ----------
+    check('T-06', '대여중 장비에는 [대여] 없음', canBorrow(items[1], 'user-a'), false);
+
+    // ---------- T-07 반납예정일 ----------
+    check('T-07', '마지막 반납예정일 = 대여일 + 7일', maxDueDate('2026-10-25'), '2026-11-01');
+    check('T-07', '7일 뒤 2026-11-01 → 됨', isValidDueDate('2026-10-25', '2026-11-01'), true);
+    check('T-07', '8일 뒤 2026-11-02 → 거부', isValidDueDate('2026-10-25', '2026-11-02'), false);
+    check('T-07', '대여일 전 2026-10-24 → 거부', isValidDueDate('2026-10-25', '2026-10-24'), false);
+    check('T-07', '당일 반납 2026-10-25 → 됨', isValidDueDate('2026-10-25', '2026-10-25'), true);
+    check('T-07', '빈 값 → 거부', isValidDueDate('2026-10-25', ''), false);
+    check('T-07', '형식이 다르면 거부 (2026/11/01)', isValidDueDate('2026-10-25', '2026/11/01'), false);
+    check('T-07', '해 넘김 2026-12-28 + 7일', maxDueDate('2026-12-28'), '2027-01-04');
+
+    // ---------- T-08 내 대여 정렬 ----------
+    check('T-08', '대여중(반납예정일 빠른 순) 먼저, 반납완료는 뒤', sortMyLoans(myLoans).map(l => l.id), [12, 11, 13]);
+
+    // ---------- T-10 연체 판정 (R-09) ----------
+    check('T-10', '대여중 · 반납예정일 어제 → 연체', isOverdue({ status: '대여중', dueDate: '2026-10-24' }, today), true);
+    check('T-10', '대여중 · 반납예정일 오늘 → 연체 아님', isOverdue({ status: '대여중', dueDate: '2026-10-25' }, today), false);
+    check('T-10', '반납완료 · 기한 지남 → 연체 아님', isOverdue({ status: '반납완료', dueDate: '2026-10-20' }, today), false);
+
+    // ---------- 날짜 도구 ----------
+    check('공통', 'todayStr() 형식 YYYY-MM-DD', /^\d{4}-\d{2}-\d{2}$/.test(todayStr()), true);
+    check('공통', 'addDays 달 넘김 2026-10-30 + 3일', addDays('2026-10-30', 3), '2026-11-02');
+    check('공통', 'DB 줄 → 화면 이름 (due_date → dueDate)',
+      toLoan({ id: 1, item_id: 2, user_id: 'u', start_date: '2026-10-25', due_date: '2026-10-28', status: '대여중', returned_at: null, created_at: 'x' }).dueDate,
+      '2026-10-28');
+
+    // ---------- 표 그리기 ----------
+    const tbody = document.getElementById('results');
+    rows.forEach(r => {
+      const tr = tbody.insertRow();
+      tr.insertCell().textContent = r.t;
+      tr.insertCell().textContent = r.name;
+      tr.insertCell().textContent = JSON.stringify(r.expected);
+      tr.insertCell().textContent = JSON.stringify(r.actual);
+      const cell = tr.insertCell();
+      cell.textContent = r.ok ? 'PASS' : 'FAIL';
+      cell.className = r.ok ? 'pass' : 'fail';
+    });
+    const passed = rows.filter(r => r.ok).length;
+    const total = document.getElementById('total');
+    total.textContent = '결과 : ' + passed + ' / ' + rows.length + ' PASS';
+    total.className = passed === rows.length ? 'pass' : 'fail';
+  </script>
+</body>
+</html>
