@@ -86,6 +86,35 @@ async function returnLoan(loanId) {
   return toLoan(data[0]);
 }
 
+// 장비 등록 : 이름 · 분류 · 보관 위치만 보낸다. 등록한 사람 · 상태는 DB가 정한다 (R-03, R-07)
+async function insertItem(item) {
+  const { data, error } = await sb
+    .from('eqp_items')
+    .insert({ name: item.name, category: item.category, location: item.location })
+    .select().single();
+  if (error) throw dbError(error);
+  return toItem(data);
+}
+
+// 장비 수정 : 이름 · 분류 · 보관 위치만 (R-07 상태는 못 고침)
+async function updateItem(id, fields) {
+  const { data, error } = await sb
+    .from('eqp_items')
+    .update({ name: fields.name, category: fields.category, location: fields.location })
+    .eq('id', id).select();
+  if (error) throw dbError(error);
+  // RLS 때문에 남의 장비 · 기본 장비는 0줄로 끝난다 (R-03)
+  if (data.length === 0) throw new Error('본인이 등록한 장비만 수정할 수 있습니다');
+  return toItem(data[0]);
+}
+
+// 장비 삭제 : 대여 기록이 있으면 DB 트리거가 이유와 함께 거부한다 (R-08)
+async function deleteItem(id) {
+  const { data, error } = await sb.from('eqp_items').delete().eq('id', id).select();
+  if (error) throw dbError(error);
+  if (data.length === 0) throw new Error('본인이 등록한 장비만 삭제할 수 있습니다');
+}
+
 // ============================================================
 // 화면
 // ============================================================
@@ -94,6 +123,7 @@ let currentUser = null;     // 로그인한 사람 (없으면 null)
 let items = [];             // 장비 목록
 let myLoans = [];           // 내 대여 기록
 let selectedItemId = null;  // 대여 패널에 고른 장비
+let editingId = null;       // 등록 폼에서 고치고 있는 장비 (없으면 새로 등록)
 
 // 화면 요소 찾기 — 없으면 콘솔에 알린다
 function el(id) {
@@ -107,6 +137,16 @@ function showMessage(text, type) {
   box.textContent = text;
   box.className = 'msg msg-' + (type || 'ok');
   box.hidden = false;
+}
+
+// 표 안의 작은 버튼
+function makeButton(text, className, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = className;
+  btn.textContent = text;
+  btn.addEventListener('click', () => onClick(btn));
+  return btn;
 }
 
 // 로그인 전 · 후 화면 차이는 여기서 currentUser 하나로만 판단한다 (PRD 4장)
@@ -144,8 +184,19 @@ function renderSummary() {
 
 function renderLeftPanel() {
   el('loginForm').hidden = !!currentUser;
+  el('itemForm').hidden = !currentUser;
   el('loanPanel').hidden = !currentUser;
   if (!currentUser) return;
+
+  // 고치던 장비가 그사이 지워졌거나 내 것이 아니면 수정 상태를 푼다
+  const editing = items.find(i => i.id === editingId);
+  if (editingId !== null && (!editing || !canEditItem(editing, currentUser.id))) {
+    editingId = null;
+    el('itemForm').reset();
+  }
+  el('itemFormTitle').textContent = editingId ? '장비 수정' : '장비 등록';
+  el('saveItemBtn').textContent = editingId ? '수정 저장' : '등록';
+  el('cancelEditBtn').hidden = !editingId;
 
   // 고른 장비가 그사이 대여중이 되었으면 선택을 푼다
   const item = items.find(i => i.id === selectedItemId);
@@ -174,15 +225,16 @@ function renderItemTable() {
   });
 
   const body = table.createTBody();
-  if (items.length === 0) {
+  const shown = filterItems(items, el('searchInput').value, el('categoryFilter').value, el('statusFilter').value);
+  if (shown.length === 0) {
     const cell = body.insertRow().insertCell();
     cell.colSpan = heads.length;
     cell.className = 'empty';
-    cell.textContent = '장비가 없습니다';
+    cell.textContent = items.length === 0 ? '장비가 없습니다' : '조건에 맞는 장비가 없습니다';
     return;
   }
 
-  items.forEach(item => {
+  shown.forEach(item => {
     const row = body.insertRow();
     row.insertCell().textContent = item.name;
     row.insertCell().textContent = item.category;
@@ -196,12 +248,12 @@ function renderItemTable() {
     if (currentUser) {
       const actions = row.insertCell();
       if (canBorrow(item, currentUser.id)) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'small';
-        btn.textContent = '대여';
-        btn.addEventListener('click', () => openLoanPanel(item.id));
-        actions.append(btn);
+        actions.append(makeButton('대여', 'small', () => openLoanPanel(item.id)));
+      }
+      // [수정] [삭제]는 내가 등록한 장비에만 (R-03)
+      if (canEditItem(item, currentUser.id)) {
+        actions.append(makeButton('수정', 'small secondary', () => editItem(item.id)));
+        actions.append(makeButton('삭제', 'small danger', btn => removeItem(item.id, btn)));
       }
     }
   });
@@ -235,22 +287,21 @@ function renderMyLoans() {
   });
 
   const body = table.createTBody();
+  const today = todayStr();
   myLoans.forEach(loan => {
     const item = items.find(i => i.id === loan.itemId);
+    const overdue = isOverdue(loan, today);
     const row = body.insertRow();
+    // 연체 = 빨간 줄 (F-11, R-09)
+    if (overdue) row.className = 'overdue';
     row.insertCell().textContent = item ? item.name : '장비 #' + loan.itemId;
     row.insertCell().textContent = loan.startDate;
     row.insertCell().textContent = loan.dueDate;
-    row.insertCell().textContent = loan.status;
+    row.insertCell().textContent = overdue ? '대여중 (연체)' : loan.status;
 
     const actions = row.insertCell();
     if (loan.status === '대여중') {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'small';
-      btn.textContent = '반납';
-      btn.addEventListener('click', () => returnItem(loan.id, btn));
-      actions.append(btn);
+      actions.append(makeButton('반납', 'small', btn => returnItem(loan.id, btn)));
     }
   });
 }
@@ -362,6 +413,77 @@ async function returnItem(loanId, btn) {
   }
 }
 
+// 등록 폼 저장 : editingId가 있으면 수정, 없으면 새로 등록 (F-08, F-09)
+async function saveItem(event) {
+  event.preventDefault();
+  const fields = {
+    name: el('itemNameInput').value.trim(),
+    category: el('itemCategorySelect').value,
+    location: el('itemLocationInput').value.trim()
+  };
+  if (!fields.name || !fields.location) {
+    showMessage('장비 이름과 보관 위치를 입력해 주세요', 'error');
+    return;
+  }
+
+  const btn = el('saveItemBtn');
+  const wasEditing = editingId !== null;
+  btn.disabled = true;
+  try {
+    if (wasEditing) {
+      await updateItem(editingId, fields);
+    } else {
+      await insertItem(fields);
+    }
+    editingId = null;
+    el('itemForm').reset();
+    if (await reloadData()) {
+      showMessage((wasEditing ? '수정했습니다 : ' : '등록했습니다 : ') + fields.name, 'ok');
+    }
+  } catch (err) {
+    showMessage(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// [수정] : 폼에 그 장비 값을 채운다
+function editItem(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  editingId = id;
+  el('itemNameInput').value = item.name;
+  el('itemCategorySelect').value = item.category;
+  el('itemLocationInput').value = item.location;
+  renderLeftPanel();
+  el('itemNameInput').focus();
+}
+
+function cancelEdit() {
+  editingId = null;
+  el('itemForm').reset();
+  renderLeftPanel();
+}
+
+// [삭제] : 한 번 묻고 지운다. 대여 기록이 있으면 DB가 거부한 이유를 그대로 보여 준다 (F-10, R-08)
+async function removeItem(id, btn) {
+  const item = items.find(i => i.id === id);
+  if (!item || !confirm('「' + item.name + '」을(를) 삭제할까요?')) return;
+
+  btn.disabled = true;
+  try {
+    await deleteItem(id);
+    if (editingId === id) {
+      editingId = null;
+      el('itemForm').reset();
+    }
+    if (await reloadData()) showMessage('삭제했습니다 : ' + item.name, 'ok');
+  } catch (err) {
+    showMessage(err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
 // ============================================================
 // 시작
 // ============================================================
@@ -371,6 +493,12 @@ async function start() {
   el('signupBtn').addEventListener('click', handleSignUp);
   el('logoutBtn').addEventListener('click', handleLogout);
   el('confirmLoanBtn').addEventListener('click', confirmLoan);
+  el('itemForm').addEventListener('submit', saveItem);
+  el('cancelEditBtn').addEventListener('click', cancelEdit);
+  // 검색 · 필터는 DB를 다시 읽지 않고 목록만 다시 그린다
+  el('searchInput').addEventListener('input', renderItemTable);
+  el('categoryFilter').addEventListener('change', renderItemTable);
+  el('statusFilter').addEventListener('change', renderItemTable);
   el('reloadBtn').addEventListener('click', async () => {
     if (await reloadData()) showMessage('새로 불러왔습니다', 'ok');
   });
@@ -389,6 +517,8 @@ async function start() {
     if (sameUser) return;
     currentUser = user;
     selectedItemId = null;
+    editingId = null;
+    el('itemForm').reset();
     // 이 콜백 안에서 Supabase를 바로 부르면 멈출 수 있어 한 박자 늦춘다
     setTimeout(reloadData, 0);
   });

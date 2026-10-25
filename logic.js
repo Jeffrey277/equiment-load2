@@ -58,6 +58,11 @@ function canBorrow(item, userId) {
   return !!userId && item.status === '대여 가능';
 }
 
+// [수정] [삭제] 버튼 : 내가 등록한 장비만. 등록한 사람이 없는 기본 장비는 누구도 안 됨 (R-03)
+function canEditItem(item, userId) {
+  return !!userId && item.ownerId === userId;
+}
+
 // ---------- 요약 · 정렬 ----------
 
 // 요약 카드 : 로그인 전 3개, 로그인 후 5개 (F-03)
@@ -73,6 +78,17 @@ function summarize(items, myLoans, today, loggedIn) {
     cards.push({ label: '내 연체', value: myLoans.filter(l => isOverdue(l, today)).length, alert: true });
   }
   return cards;
+}
+
+// 검색 · 필터 : 검색어(이름 · 보관 위치) + 분류 + 상태를 모두 만족하는 장비만 (F-12)
+// '전체'나 빈 값이면 그 조건은 걸지 않는다
+function filterItems(items, keyword, category, status) {
+  const word = (keyword || '').trim().toLowerCase();
+  return items.filter(item =>
+    (!word || item.name.toLowerCase().includes(word) || item.location.toLowerCase().includes(word)) &&
+    (!category || category === '전체' || item.category === category) &&
+    (!status || status === '전체' || item.status === status)
+  );
 }
 
 // 내 대여 : 대여중 먼저(반납예정일 빠른 순), 그다음 반납완료(최근 반납 먼저) (F-05)

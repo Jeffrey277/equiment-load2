@@ -57,10 +57,10 @@
 |---|---|
 | 함수(logic.js) | todayStr(), formatDate(d), parseDate(str), addDays(str, n), maxDueDate(startDate), isValidDueDate(startDate, dueDate), isOverdue(loan, today), canBorrow(item, userId), canEditItem(item, userId), summarize(items, myLoans, today, loggedIn), filterItems(items, keyword, category, status), sortMyLoans(loans), toItem(row), toLoan(row) |
 | 함수(app.js) 저장 | dbError(error), authError(error), getCurrentUser(), signUp(email, password), signIn(email, password), signOut(), loadData(), insertLoan(itemId, dueDate), returnLoan(loanId), insertItem(item), updateItem(id, fields), deleteItem(id) |
-| 함수(app.js) 화면 | el(id), renderAll(), renderHeader(), renderSummary(), renderLeftPanel(), renderItemTable(), renderMyLoans(), readLoginInputs(), handleLogin(event), handleSignUp(), handleLogout(), openLoanPanel(itemId), confirmLoan(), returnItem(loanId, btn), saveItem(), editItem(id), cancelEdit(), removeItem(id), reloadData(), showMessage(text, type), start() |
+| 함수(app.js) 화면 | el(id), makeButton(text, className, onClick), renderAll(), renderHeader(), renderSummary(), renderLeftPanel(), renderItemTable(), renderMyLoans(), readLoginInputs(), handleLogin(event), handleSignUp(), handleLogout(), openLoanPanel(itemId), confirmLoan(), returnItem(loanId, btn), saveItem(event), editItem(id), cancelEdit(), removeItem(id, btn), reloadData(), showMessage(text, type), start() |
 | 상수 | LOAN_MAX_DAYS (logic.js, 7), AUTH_MESSAGES (app.js) |
 | 전역 변수(app.js) | sb (Supabase 클라이언트), currentUser, items, myLoans, selectedItemId, editingId |
-| 화면 id   | appHeader, headerStatus, userEmail, logoutBtn, reloadBtn, summaryCards, loginForm, emailInput, passwordInput, loginBtn, signupBtn, itemForm, itemNameInput, itemCategorySelect, itemLocationInput, saveItemBtn, cancelEditBtn, loanPanel, loanItemName, dueDateInput, confirmLoanBtn, searchInput, categoryFilter, statusFilter, itemTable, myLoansSection, myLoansHint, myLoansTable, msgBox |
+| 화면 id   | appHeader, headerStatus, userEmail, logoutBtn, reloadBtn, summaryCards, loginForm, emailInput, passwordInput, loginBtn, signupBtn, itemForm, itemFormTitle, itemNameInput, itemCategorySelect, itemLocationInput, saveItemBtn, cancelEditBtn, loanPanel, loanItemName, dueDateInput, confirmLoanBtn, searchInput, categoryFilter, statusFilter, itemTable, myLoansSection, myLoansHint, myLoansTable, msgBox |
 | 설정(config.js) | SUPABASE_URL, SUPABASE_KEY |
 | DB 표 | eqp_items, eqp_loans |
 

@@ -43,6 +43,28 @@
           <p class="hint">가상 이메일(test1@example.com 등)만 쓰세요.</p>
         </form>
 
+        <!-- 장비 등록 · 수정 폼 : 로그인 후 -->
+        <form id="itemForm" class="panel" hidden>
+          <h2 id="itemFormTitle">장비 등록</h2>
+          <label>이름
+            <input id="itemNameInput" type="text" maxlength="50" placeholder="예: 휴대용 가스 측정기">
+          </label>
+          <label>분류
+            <select id="itemCategorySelect">
+              <option>노트북</option>
+              <option>영상</option>
+              <option>측정</option>
+              <option>통신</option>
+              <option>기타</option>
+            </select>
+          </label>
+          <label>보관 위치
+            <input id="itemLocationInput" type="text" maxlength="50" placeholder="예: 1층 설비팀">
+          </label>
+          <button id="saveItemBtn" type="submit">등록</button>
+          <button id="cancelEditBtn" type="button" class="secondary" hidden>취소</button>
+        </form>
+
         <section id="loanPanel" class="panel" hidden>
           <h2>대여</h2>
           <p class="loan-item">장비 : <strong id="loanItemName"></strong></p>
@@ -56,6 +78,23 @@
 
       <section class="right panel">
         <h2>장비 목록</h2>
+        <!-- 검색 · 필터 : 누구나 -->
+        <div class="filters">
+          <input id="searchInput" type="search" placeholder="이름 · 보관 위치 검색">
+          <select id="categoryFilter" aria-label="분류">
+            <option>전체</option>
+            <option>노트북</option>
+            <option>영상</option>
+            <option>측정</option>
+            <option>통신</option>
+            <option>기타</option>
+          </select>
+          <select id="statusFilter" aria-label="상태">
+            <option>전체</option>
+            <option>대여 가능</option>
+            <option>대여중</option>
+          </select>
+        </div>
         <div class="table-wrap">
           <table id="itemTable"></table>
         </div>

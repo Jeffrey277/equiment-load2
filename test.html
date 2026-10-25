@@ -82,6 +82,31 @@
     check('T-10', '대여중 · 반납예정일 오늘 → 연체 아님', isOverdue({ status: '대여중', dueDate: '2026-10-25' }, today), false);
     check('T-10', '반납완료 · 기한 지남 → 연체 아님', isOverdue({ status: '반납완료', dueDate: '2026-10-20' }, today), false);
 
+    // ---------- T-04 수정 · 삭제 버튼 (R-03) ----------
+    const mine = { id: 21, ownerId: 'user-a', status: '대여 가능' };
+    const baseItem = { id: 22, ownerId: null, status: '대여 가능' };
+    check('T-04', '내가 등록한 장비 → [수정] [삭제] 있음', canEditItem(mine, 'user-a'), true);
+    check('T-04', '남이 등록한 장비 → 없음', canEditItem(mine, 'user-b'), false);
+    check('T-04', '기본 장비(등록한 사람 없음) → 누구도 없음', canEditItem(baseItem, 'user-a'), false);
+    check('T-04', '로그아웃 상태 → 없음', canEditItem(mine, null), false);
+    check('T-04', '대여중이어도 내 장비면 [수정] [삭제] 있음 (삭제는 DB가 판정)', canEditItem({ ownerId: 'user-a', status: '대여중' }, 'user-a'), true);
+
+    // ---------- T-11 검색 · 필터 (F-12) ----------
+    const sample = [
+      { id: 1, name: '업무용 노트북 A', category: '노트북', location: '3층 총무팀', status: '대여 가능' },
+      { id: 2, name: '열화상 카메라', category: '측정', location: '1층 설비팀', status: '대여 가능' },
+      { id: 3, name: '휴대용 가스 측정기', category: '측정', location: '1층 설비팀', status: '대여중' },
+      { id: 4, name: '무전기 1호', category: '통신', location: '1층 경비실', status: '대여 가능' },
+      { id: 5, name: 'USB Hub', category: '기타', location: '지하 1층 창고', status: '대여 가능' }
+    ];
+    const ids = list => list.map(i => i.id);
+    check('T-11', '조건 없음(전체) → 모두', ids(filterItems(sample, '', '전체', '전체')), [1, 2, 3, 4, 5]);
+    check('T-11', '측정 + 대여 가능 + "1층" → 세 조건 모두', ids(filterItems(sample, '1층', '측정', '대여 가능')), [2]);
+    check('T-11', '보관 위치로 검색 "설비팀"', ids(filterItems(sample, '설비팀', '전체', '전체')), [2, 3]);
+    check('T-11', '상태만 대여중', ids(filterItems(sample, '', '전체', '대여중')), [3]);
+    check('T-11', '대소문자 · 앞뒤 공백 무시 "  usb "', ids(filterItems(sample, '  usb ', '전체', '전체')), [5]);
+    check('T-11', '맞는 장비 없음 → 빈 목록', ids(filterItems(sample, '노트북', '통신', '전체')), []);
+
     // ---------- 날짜 도구 ----------
     check('공통', 'todayStr() 형식 YYYY-MM-DD', /^\d{4}-\d{2}-\d{2}$/.test(todayStr()), true);
     check('공통', 'addDays 달 넘김 2026-10-30 + 3일', addDays('2026-10-30', 3), '2026-11-02');
